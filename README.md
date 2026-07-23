@@ -1,75 +1,75 @@
-# 📝 AdHoc‑GPT
+# AdHoc-GPT
 
-*A transformer‑based language model built from scratch in PyTorch, specialized for diplomacy, resolutions, and debate.*
+A decoder-only transformer language model implemented from first principles in PyTorch, together with the full pipeline required to train, specialize, deploy and inspect it. The applied domain is multilateral drafting: resolutions, debate records and position papers.
 
-**A GPT trained from zero — architecture, tokenizer, training loop, retrieval and application — with no `nn.MultiheadAttention`, no `nn.LayerNorm`, and no tokenizer library.**
-
-- 🧠 **Transformer from first principles** — causal multi‑head attention, LayerNorm, GELU, KV cache, weight tying, all hand‑written and unit‑tested against `torch.nn` equivalents
-- 🔤 **Own byte‑level BPE** — merge training with incremental pair statistics: **1.1 s** for 768 merges over 1.1M characters (a naive recount takes ~6 min), verified against a reference implementation
-- 🏋️ **Real training stack** — mixed precision, gradient accumulation, cosine LR with warmup, gradient clipping, checkpoint/resume, memory‑mapped data, DDP via `torchrun`, MFU/throughput benchmarks
-- 📉 **Trained models with published curves** — 7.5M‑parameter Mini‑AdHoc‑LM hits **1.4528** val loss on character‑level Shakespeare (nanoGPT baseline ≈1.47)
-- 🔎 **Retrieval built from scratch** — BM25 + dense retrieval over the model's own embeddings, reciprocal‑rank fusion, MMR diversity, context‑budgeted prompt assembly
-- ✅ **56 tests** — including a gradient check proving no position attends to the future, and KV‑cache/full‑forward equivalence
-- ▶️ **One command reproduces everything**: `bash scripts/reproduce_all.sh`
+The implementation deliberately avoids `torch.nn.MultiheadAttention`, `torch.nn.LayerNorm` and any external tokenizer library. Attention, normalization, activation, tokenization and the training loop are written directly and verified against reference implementations in the test suite.
 
 ---
 
-## 🌍 Overview
+## Summary of contributions
 
-**AdHoc‑GPT** builds a language model from first principles — tokenizer, attention, training loop, everything — and then takes it all the way to an application: a retrieval‑augmented resolution‑drafting tool.
+1. **Transformer implemented from first principles.** Causal multi-head self-attention, layer normalization, GELU, position-wise feed-forward blocks, weight tying and a key/value cache for generation. Correctness is established by unit tests against `torch.nn` equivalents and by a gradient-based check that no position attends to a later position.
+2. **Byte-level BPE trained from scratch.** Merge learning maintains pair statistics incrementally rather than recounting the corpus at every step, reducing 768 merges over 1.1M characters from approximately six minutes to 1.1 seconds. The result is validated against a naive reference implementation.
+3. **A complete training stack.** Mixed-precision training, gradient accumulation, cosine learning-rate decay with warmup, gradient clipping, checkpointing and resumption, memory-mapped datasets, distributed data-parallel training via `torchrun`, and throughput instrumentation reporting milliseconds per iteration, tokens per second, model-flops utilization and peak memory.
+4. **Trained models with published curves.** A 7.5M-parameter model attains 1.4528 validation cross-entropy on character-level Shakespeare; an 8.1M-parameter model with a 2048-token BPE vocabulary attains 1.5990 on a TinyStories subset.
+5. **Domain specialization by fine-tuning.** A synthetic corpus of multilateral documents is generated from clause grammars, and a pretrained checkpoint is adapted to it under a shared vocabulary.
+6. **Retrieval-augmented generation implemented from scratch.** Okapi BM25, dense retrieval over the model's own token embeddings, reciprocal-rank fusion, maximal marginal relevance for redundancy reduction, and context-budgeted prompt assembly.
+7. **Reproducibility.** A single script reproduces every phase: `bash scripts/reproduce_all.sh`. The test suite contains 56 tests.
 
-All five phases of the original roadmap are implemented:
+---
 
-| Phase | What it is | Where |
+## Project phases
+
+| Phase | Scope | Implementation |
 |---|---|---|
-| 1. Core LLM Build | tokenizers, embeddings, causal multi‑head attention, feed‑forward, training loop, sampling | `tokenizer.py`, `model.py`, `train.py`, `generate.py` |
-| 2. Scaling & Engineering | BPE vocabulary, TinyStories/WikiText, AMP, grad accumulation, `torch.compile`, DDP, throughput benchmarks | `data.py`, `train.py`, `bench.py` |
-| 3. Domain Specialization | synthetic diplomacy corpus + fine‑tuning from a pretrained checkpoint | `domain/corpus.py`, `train.py --init-from` |
-| 4. Application & RAG | BM25 + embedding retrieval over a clause library, drafting CLI and web UI | `rag.py`, `app.py` |
-| 5. Visualization | attention maps, per‑token loss, embedding PCA, run comparison | `viz.py`, `plots.py` |
+| 1. Core model | tokenizers, embeddings, causal attention, feed-forward, training loop, sampling | `tokenizer.py`, `model.py`, `train.py`, `generate.py` |
+| 2. Scaling and engineering | BPE vocabulary, larger corpora, mixed precision, gradient accumulation, `torch.compile`, distributed training, benchmarking | `data.py`, `train.py`, `bench.py` |
+| 3. Domain specialization | synthetic corpus generation and fine-tuning from a pretrained checkpoint | `domain/corpus.py`, `train.py --init-from` |
+| 4. Application and retrieval | BM25 and dense retrieval over a clause library, drafting interface and web service | `rag.py`, `app.py` |
+| 5. Visualization | attention maps, per-token loss, embedding projection, run comparison | `viz.py`, `plots.py` |
 
-> **On the domain data:** the diplomacy corpus is *synthetic and templated* — generated in‑repo from clause grammars. The domain model imitates the register of multilateral drafting; it does not reproduce real UN documents or any State's position. See [MODEL_CARD.md](MODEL_CARD.md).
+**Note on the domain corpus.** The diplomatic corpus is synthetic and templated, generated within this repository from clause grammars. The specialized model reproduces the register of multilateral drafting; it does not reproduce authentic documents, and generated text should not be read as the position of any State or organ. See [MODEL_CARD.md](MODEL_CARD.md).
 
 ---
 
-## 🚀 Quickstart
+## Installation and use
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Phase 1 in three commands
+# Phase 1
 python -m adhoc_gpt.data  --dataset shakespeare --tokenizer char --out-dir data/shakespeare_char
 python -m adhoc_gpt.train --preset mini --data-dir data/shakespeare_char --out-dir runs/mini-adhoc-lm
 python -m adhoc_gpt.generate --ckpt runs/mini-adhoc-lm/ckpt.pt --prompt "KING RICHARD III:"
 
-# or run every phase end to end (~1h on one 8GB GPU; FAST=1 for a smoke test)
+# All phases end to end (approximately one hour on a single 8 GB GPU)
 bash scripts/reproduce_all.sh
 ```
 
-No GPU? `--device cpu --preset nano --max-iters 500` trains a toy model in minutes.
+Without a GPU, `--device cpu --preset nano --max-iters 500` trains a small model in a few minutes.
 
 ---
 
-## 📊 Results
+## Results
 
-All numbers below were produced by the code in this repo on a single **RTX 4070 Laptop (8 GB)**.
+All results were produced by the code in this repository on a single RTX 4070 Laptop GPU (8 GB) using bfloat16 mixed precision.
 
-| run | params | data | tokens seen | best val loss | wall clock |
+| Run | Parameters | Corpus | Tokens seen | Best validation loss | Wall clock |
 |---|---|---|---|---|---|
-| **Mini‑AdHoc‑LM** (Phase 1) | 7.48M | tiny‑Shakespeare, char vocab 65 | 82M | **1.4528** | 28.9 min |
-| **Mini‑TinyStories** (Phase 2) | 8.11M | TinyStories 53.6M chars, BPE vocab 2048 | 74M | **1.5990** | 23.9 min |
-| **AdHoc‑LM‑Domain** (Phase 3) | 8.11M | synthetic diplomacy, fine‑tuned from Phase 2 | — | *(training)* | — |
+| Mini-AdHoc-LM (Phase 1) | 7.48M | tiny-Shakespeare, character vocabulary of 65 | 82M | 1.4528 | 28.9 min |
+| Mini-TinyStories (Phase 2) | 8.11M | TinyStories, 53.6M characters, BPE vocabulary of 2048 | 74M | 1.5990 | 23.9 min |
+| AdHoc-LM-Domain (Phase 3) | 8.11M | synthetic diplomatic corpus, fine-tuned from Phase 2 | — | *(in progress)* | — |
 
-For reference, nanoGPT's character‑level Shakespeare baseline lands at ≈1.47 validation loss — Mini‑AdHoc‑LM reaches **1.4528** with a from‑scratch implementation at 7.5M parameters.
+Losses are cross-entropy per token and are not comparable across rows, since the tokenizers differ in how much information a single token carries. For reference, the character-level Shakespeare configuration of nanoGPT reports approximately 1.47 validation loss; the from-scratch implementation here reaches 1.4528 at 7.5M parameters.
 
 ### Training curves
 
 ![Mini-AdHoc-LM training curves](runs/mini-adhoc-lm/training_curves.png)
 
-Validation bottoms out at iteration 2500 and then rises while training loss keeps falling — textbook overfitting of a 7.5M‑parameter model on a 1M‑character corpus. The best checkpoint (not the last) is the one saved.
+Validation loss reaches its minimum at iteration 2500 and increases thereafter while training loss continues to fall, the expected overfitting behaviour for a 7.5M-parameter model on a corpus of 1.1M characters. Checkpoint selection uses the validation minimum rather than the final iterate.
 
-### Sample — Mini‑AdHoc‑LM, prompt `KING RICHARD III:`
+### Sample output, Mini-AdHoc-LM, prompt `KING RICHARD III:`
 
 ```
 KING RICHARD III:
@@ -83,77 +83,75 @@ Have in the second heart, being against my honour
 Is lawful back.
 ```
 
-Trained from random initialisation on 1.1M characters: it has learned speaker headings, blank‑verse line length, punctuation and Early Modern morphology — with no notion of meaning, which is exactly what 7.5M parameters buys.
+Trained from random initialization on 1.1M characters, the model has acquired speaker headings, blank-verse line length, punctuation conventions and Early Modern morphology, without semantic coherence. This is the expected capability at this scale.
 
-### Inside the model — attention patterns (layer 0, all 8 heads)
+### Attention structure, layer 0, all eight heads
 
 ![Attention maps](runs/mini-adhoc-lm/attention_L0.png)
 
-Every map is strictly lower‑triangular: the causal mask holds, so no position can see the future. The heads have specialised — H3 is a pure self/identity head, H1 attends to the previous token, H6 spreads attention diffusely over history, and H0/H5 anchor on the sequence start.
-
-<!--RESULTS_END-->
+Every attention map is strictly lower-triangular, confirming that the causal mask prevents any position from attending to its successors. The heads have differentiated: head 3 approximates an identity mapping, head 1 attends to the immediately preceding token, head 6 distributes attention broadly over the history, and heads 0 and 5 anchor on the start of the sequence.
 
 ---
 
-## 🏗️ Phase 1 — the model
+## Phase 1: model architecture
 
-Decoder‑only transformer, pre‑norm residual blocks:
+Decoder-only transformer with pre-normalization residual blocks:
 
 ```
-tokens ─► token embedding + positional embedding ─► dropout
-       ─► [ x + CausalSelfAttention(LayerNorm(x))
-            x + MLP(LayerNorm(x))              ] × n_layer
-       ─► LayerNorm ─► lm_head (weights tied to the token embedding) ─► logits
+tokens -> token embedding + positional embedding -> dropout
+       -> [ x + CausalSelfAttention(LayerNorm(x))
+            x + MLP(LayerNorm(x))              ] x n_layer
+       -> LayerNorm -> lm_head (tied to the token embedding) -> logits
 ```
 
-| Component | Where | Notes |
+| Component | Location | Notes |
 |---|---|---|
-| Character tokenizer | `tokenizer.py` | one id per unique character (65 for Shakespeare) |
-| Byte‑level BPE | `tokenizer.py` | pair counting + merge table trained from scratch, regex pre‑split, byte fallback so any Unicode round‑trips. Incremental pair statistics: 768 merges over 1.1M characters in **1.1 s** |
-| Token + positional embeddings | `model.py` | learned, weight‑tied output head |
-| Multi‑head self‑attention | `CausalSelfAttention` | fused QKV projection, `softmax(QKᵀ/√d + causal mask)V` written out by hand; `--no-flash` forces the manual path, the default uses the numerically‑equivalent fused SDPA kernel |
-| Causal masking | `CausalSelfAttention.mask` | lower‑triangular buffer, offset‑aware so it stays correct with a KV cache |
-| Feed‑forward | `MLP` | C → 4C → GELU → C |
-| LayerNorm / GELU | `LayerNorm`, `gelu` | from scratch, unit‑tested against `torch.nn` equivalents |
-| KV cache | `AdHocGPT.generate` | O(T) per generated token instead of O(T²) |
-| Sampling | `generate.py` | temperature, top‑k, nucleus (top‑p), seeded |
+| Character tokenizer | `tokenizer.py` | one identifier per distinct character (65 for Shakespeare) |
+| Byte-level BPE | `tokenizer.py` | merge table learned from pair counts, regular-expression pre-segmentation, byte-level fallback so that arbitrary Unicode round-trips |
+| Token and positional embeddings | `model.py` | learned; output projection tied to the token embedding |
+| Multi-head self-attention | `CausalSelfAttention` | fused query/key/value projection; `softmax(QKᵀ/√d + causal mask)V` computed explicitly. `--no-flash` selects the explicit path; the default uses the numerically equivalent fused kernel |
+| Causal masking | `CausalSelfAttention.mask` | lower-triangular buffer, offset-aware so that it remains correct under key/value caching |
+| Feed-forward network | `MLP` | C → 4C → GELU → C |
+| Layer normalization, GELU | `LayerNorm`, `gelu` | implemented directly; unit-tested against `torch.nn` equivalents |
+| Key/value cache | `AdHocGPT.generate` | reduces per-token generation cost from O(T²) to O(T) |
+| Sampling | `generate.py` | temperature, top-k, nucleus (top-p), seeded |
 
-Presets (`config.py`):
+Model configurations defined in `config.py`:
 
-| preset | layers | heads | n_embd | context | params (vocab 65) |
+| Preset | Layers | Heads | Embedding | Context | Parameters (vocabulary 65) |
 |---|---|---|---|---|---|
 | `nano` | 4 | 4 | 128 | 128 | 0.8M |
-| `mini` | 6 | 8 | 320 | 256 | **7.5M** |
+| `mini` | 6 | 8 | 320 | 256 | 7.5M |
 | `small` | 8 | 8 | 512 | 512 | 25M |
 | `base` | 12 | 12 | 768 | 1024 | 86M |
 
 ---
 
-## ⚙️ Phase 2 — scaling & engineering
+## Phase 2: scaling and engineering
 
 ```bash
-python -m adhoc_gpt.bench --preset mini --sweep attention   # flash vs manual attention
+python -m adhoc_gpt.bench --preset mini --sweep attention   # explicit vs fused attention
 python -m adhoc_gpt.bench --sweep presets --batch-size 32   # ms/iter, tokens/s, MFU, peak memory
-python -m adhoc_gpt.bench --sweep batch  --preset small     # find the batch size that fits
+python -m adhoc_gpt.bench --sweep batch --preset small      # largest batch that fits
 
-# a BPE vocabulary shared by two corpora (required before fine-tuning)
+# A BPE vocabulary shared by the pretraining and fine-tuning corpora
 python -m adhoc_gpt.data --train-tokenizer tinystories data/raw/diplomacy.txt \
     --tokenizer bpe --vocab-size 2048 --out-dir data/shared_vocab
 python -m adhoc_gpt.data --dataset tinystories --max-docs 60000 \
     --tokenizer-from data/shared_vocab/tokenizer.json --out-dir data/tinystories_bpe
 
-# multi-GPU data parallel
+# Distributed data-parallel training
 torchrun --standalone --nproc_per_node=4 -m adhoc_gpt.train --preset small \
     --data-dir data/tinystories_bpe --grad-accum-steps 8
 ```
 
-Also in the loop: mixed precision (bf16/fp16 + GradScaler), gradient accumulation, gradient clipping, cosine LR with warmup, checkpoint/resume, memory‑mapped datasets, `torch.compile`.
+Throughput measurement synchronizes the CUDA stream before timing; without this, the timer records kernel-launch overhead rather than compute and reports utilization figures above 100%.
 
 ---
 
-## 🕊️ Phase 3 — domain specialization
+## Phase 3: domain specialization
 
-`adhoc_gpt/domain/corpus.py` generates resolutions, verbatim debate records, position papers and procedural records over eight topics. Clauses are **typed by the complement they take** (`np`, `np_to`, `that`, `inf`), so an operative verb is never paired with a phrase it cannot govern:
+`domain/corpus.py` generates resolutions, verbatim debate records, position papers and procedural records across eight topics. Clauses are typed by the complement each verb governs (noun phrase, object plus infinitive, that-clause, bare infinitive), so an operative verb is never combined with a phrase it cannot take:
 
 ```
 The General Assembly,
@@ -167,7 +165,7 @@ the Paris Agreement,
 2. Decides to establish a voluntary trust fund in support of early warning systems.
 ```
 
-Fine‑tune a pretrained checkpoint on it (architecture and vocabulary come from the checkpoint):
+Fine-tuning takes the architecture and vocabulary from the base checkpoint and rejects a vocabulary mismatch:
 
 ```bash
 python -m adhoc_gpt.data --dataset data/raw/diplomacy.txt \
@@ -178,91 +176,83 @@ python -m adhoc_gpt.train --data-dir data/diplomacy_bpe --out-dir runs/adhoc-lm-
 
 ---
 
-## 🔎 Phase 4 — application & RAG
+## Phase 4: retrieval-augmented drafting
 
-Retrieval is implemented from scratch — no search dependency:
+Retrieval is implemented without an external search dependency:
 
-* **BM25** (`rag.py`) — Okapi term weighting over a clause library built from the corpus.
-* **Embedding retrieval** — document vectors are mean token embeddings *from the trained model itself*, scored by cosine similarity.
-* **Hybrid** — reciprocal‑rank fusion of both, then **MMR** re‑ranking so four retrieved precedents are four *different* clauses instead of four paraphrases.
+- **BM25** (`rag.py`): Okapi term weighting over a clause library derived from the corpus.
+- **Dense retrieval**: document vectors formed as mean token embeddings taken from the trained model itself, scored by cosine similarity.
+- **Hybrid retrieval**: reciprocal-rank fusion of both rankings, followed by maximal marginal relevance so that the retrieved clauses are distinct rather than paraphrases of one another.
+- **Prompt assembly**: precedent is dropped until the assembled prompt fits within the model's context window, and the interface reports only the clauses the model actually received.
 
 ```bash
 python -m adhoc_gpt.rag --build --corpus data/raw/diplomacy.txt --library data/clause_library.json
 python -m adhoc_gpt.app draft --topic "maritime security" --tokens 400
 python -m adhoc_gpt.app repl                  # interactive drafting
-python -m adhoc_gpt.app serve --port 8000     # web UI (stdlib http.server, no framework)
+python -m adhoc_gpt.app serve --port 8000     # web interface, standard library only
 ```
 
-Retrieved clauses are formatted into a document header the fine‑tuned model recognises, so it *continues* the resolution rather than describing one. Every draft carries the synthetic‑output disclaimer.
+Retrieved clauses are formatted into a document header matching the corpus, so that the fine-tuned model continues the document rather than describing it. Generated output carries a disclaimer identifying it as synthetic.
 
 ---
 
-## 📈 Phase 5 — visualization
+## Phase 5: visualization
 
 ```bash
 python -m adhoc_gpt.viz attention  --ckpt runs/mini-adhoc-lm/ckpt.pt --text "ROMEO: But soft,"
 python -m adhoc_gpt.viz token-loss --ckpt runs/adhoc-lm-domain/ckpt.pt --text "Recalling its ..."
 python -m adhoc_gpt.viz embeddings --ckpt runs/mini-adhoc-lm/ckpt.pt
 python -m adhoc_gpt.viz compare    --runs runs/mini-adhoc-lm runs/mini-tinystories
-python -m adhoc_gpt.plots --run runs/mini-adhoc-lm      # loss + LR schedule
+python -m adhoc_gpt.plots --run runs/mini-adhoc-lm
 ```
 
 ---
 
-## 🧪 Tests
+## Testing
 
 ```bash
-pytest        # ~2 min on CPU
+pytest
 ```
 
-Covers: LayerNorm/GELU parity with `torch.nn`; **no information leaks from future positions** (gradient check); manual vs fused attention agreement; KV‑cache vs full‑forward equivalence; tokenizer round‑trips including Unicode and special tokens; **fast BPE trainer vs a naive recount**; LR schedule; next‑token batch shifting; end‑to‑end training that must reduce the loss; fine‑tuning from a checkpoint (and rejecting a vocabulary mismatch); clause‑grammar type alignment; BM25 ranking, filtering and MMR diversity; the HTTP drafting API; and every plot.
+The suite comprises 56 tests covering: parity of the layer normalization and GELU implementations with `torch.nn`; absence of information flow from future positions, established by gradient inspection; agreement between the explicit and fused attention paths; equivalence of cached and uncached forward passes; tokenizer round-trips including Unicode and special tokens; agreement of the incremental BPE trainer with a naive recount; the learning-rate schedule; next-token alignment of training batches; end-to-end training that must reduce the loss; fine-tuning from a checkpoint and rejection of vocabulary mismatch; type alignment of the clause grammars; BM25 ranking, filtering and redundancy reduction; the HTTP drafting interface; and every plotting routine.
 
-> If your shell has a system `PYTHONPATH` (e.g. ROS), run `env -u PYTHONPATH pytest`.
-
----
-
-## 🧩 Roadmap
-
-- [x] Initialize repo + environment
-- [x] Implement tokenizer + embeddings
-- [x] Multi‑head attention
-- [x] Feedforward layers, normalization, causal masking
-- [x] Training loop for Mini‑AdHoc‑LM
-- [x] Pretrain Mini‑AdHoc‑LM on Shakespeare
-- [x] Publish initial training curves
-- [x] Phase 2 — BPE vocabulary, TinyStories scale‑up, DDP, throughput benchmarks
-- [x] Phase 3 — domain corpus + fine‑tuning
-- [x] Phase 4 — retrieval‑augmented drafting app (CLI + web UI)
-- [x] Phase 5 — attention / embedding / loss visualizations
-- [ ] Next: real (non‑synthetic) domain corpora, instruction‑tuning, longer context
+If the shell defines a system `PYTHONPATH` (for example under ROS), invoke the suite as `env -u PYTHONPATH pytest`.
 
 ---
 
-## 📁 Layout
+## Repository layout
 
 ```
 adhoc_gpt/
-  config.py       GPTConfig / TrainConfig + model presets
-  tokenizer.py    character-level and byte-level BPE tokenizers (from scratch)
-  data.py         corpus download, shared-vocab training, tokenization, mmap batching
-  model.py        LayerNorm, GELU, CausalSelfAttention, MLP, Block, AdHocGPT
-  train.py        training loop (AMP, cosine LR, grad accum, DDP, fine-tuning)
-  generate.py     sampling CLI (temperature / top-k / top-p / KV cache)
-  bench.py        throughput, MFU and memory benchmarks
-  rag.py          BM25 + embedding retrieval, clause library, MMR, prompt assembly
-  app.py          drafting application: draft / retrieve / repl / serve
-  viz.py          attention maps, per-token loss, embedding PCA, run comparison
-  plots.py        training-curve plots
-  domain/corpus.py synthetic diplomacy corpus generator
-scripts/          reproduce_phase1.sh, reproduce_all.sh
-tests/            unit + end-to-end tests
-runs/             checkpoints, metrics.csv, curves, samples
+  config.py         model and training configuration, presets
+  tokenizer.py      character-level and byte-level BPE tokenizers
+  data.py           corpus acquisition, shared-vocabulary training, tokenization, batching
+  model.py          LayerNorm, GELU, CausalSelfAttention, MLP, Block, AdHocGPT
+  train.py          training loop: mixed precision, cosine schedule, DDP, fine-tuning
+  generate.py       sampling interface
+  bench.py          throughput, utilization and memory benchmarks
+  rag.py            BM25 and dense retrieval, clause library, MMR, prompt assembly
+  app.py            drafting application: draft, retrieve, repl, serve
+  viz.py            attention maps, per-token loss, embedding projection, run comparison
+  plots.py          training curves
+  domain/corpus.py  synthetic diplomatic corpus generator
+scripts/            reproduce_phase1.sh, reproduce_all.sh
+tests/              unit and end-to-end tests
+runs/               metrics, curves, samples (weights are not tracked)
 ```
 
 ---
 
-## 🙌 Acknowledgements
+## Status
 
-- Sebastian Raschka — *“Build a Large Language Model (From Scratch)”*
-- Andrej Karpathy — nanoGPT / minBPE, for the tiny‑Shakespeare corpus and the training‑loop shape
-- `roneneldan/TinyStories` for the Phase‑2 pretraining corpus
+Phases 1, 2, 4 and 5 are complete. Phase 3 fine-tuning is running; its results and a generated draft will be added on completion. Subsequent work: non-synthetic domain corpora, instruction tuning, and longer context.
+
+---
+
+## References
+
+- S. Raschka, *Build a Large Language Model (From Scratch)*.
+- A. Karpathy, nanoGPT and minBPE, for the tiny-Shakespeare corpus and the structure of the training loop.
+- R. Eldan and Y. Li, *TinyStories*, used as the Phase 2 pretraining corpus.
+- S. Robertson and H. Zaragoza, *The Probabilistic Relevance Framework: BM25 and Beyond*.
+- J. Carbonell and J. Goldstein, *The Use of MMR, Diversity-Based Reranking for Reordering Documents*.
