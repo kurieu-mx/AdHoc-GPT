@@ -1,0 +1,15 @@
+# environments / caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# datasets and tokenized binaries -- regenerate with `python -m adhoc_gpt.data`
+data/
+*.bin
+
+# model weights -- regenerate with scripts/reproduce_all.sh
+*.pt
+
+# NOTE: run artefacts are deliberately tracked (metrics.csv, summary.json,
+# training curves, attention maps, samples) so the results are visible in-repo.

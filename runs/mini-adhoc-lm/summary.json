@@ -1,0 +1,12 @@
+{
+  "params": 7479680,
+  "best_val_loss": 1.452845811843872,
+  "final": {
+    "iter": 4999,
+    "train": 0.8121892809867859,
+    "val": 1.5330493450164795
+  },
+  "train_time_s": 1736.8,
+  "tokens_seen": 81920000,
+  "out_dir": "runs/mini-adhoc-lm"
+}

@@ -1,0 +1,12 @@
+{
+  "params": 8114240,
+  "best_val_loss": 1.5989519357681274,
+  "final": {
+    "iter": 5999,
+    "train": 1.4759873151779175,
+    "val": 1.6045985221862793
+  },
+  "train_time_s": 1435.9,
+  "tokens_seen": 73728000,
+  "out_dir": "runs/mini-tinystories"
+}
