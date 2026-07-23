@@ -17,10 +17,13 @@ Single RTX 4070 Laptop (8 GB), bf16 mixed precision.
 |---|---|---|---|---|---|---|
 | `mini-adhoc-lm` | 7.48M | 65 (char) | 256 | 82M | 1.4528 | 28.9 min |
 | `mini-tinystories` | 8.11M | 2048 (BPE) | 256 | 74M | 1.5990 | 23.9 min |
-| `adhoc-lm-domain` | 8.11M | 2048 (BPE) | 256 | — | *(training)* | — |
+| `adhoc-lm-domain` | 8.11M | 2048 (BPE) | 256 | 25M | 0.2892 | 8.8 min |
 
 Losses are not comparable across rows: they are cross-entropy per *token*, and the
 tokenizers differ (a character and a BPE token carry different amounts of information).
+The low domain loss measures the predictability of a templated corpus, not model quality.
+Fine-tuning moved validation loss from 8.94 to 1.31 in 100 iterations and to 0.2892 at
+convergence, which indicates that the corpus is close to memorisable at this scale.
 
 ## Architecture
 

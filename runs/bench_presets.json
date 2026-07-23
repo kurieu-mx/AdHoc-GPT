@@ -1,0 +1,44 @@
+[
+  {
+    "label": "nano",
+    "params_m": 1.07,
+    "batch_size": 16,
+    "block_size": 128,
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "attention": "flash",
+    "compiled": false,
+    "ms_per_iter": 10.04,
+    "tokens_per_s": 203965,
+    "mfu_pct": 4.19,
+    "peak_mem_gb": 0.18
+  },
+  {
+    "label": "mini",
+    "params_m": 8.11,
+    "batch_size": 16,
+    "block_size": 256,
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "attention": "flash",
+    "compiled": false,
+    "ms_per_iter": 53.9,
+    "tokens_per_s": 75992,
+    "mfu_pct": 11.85,
+    "peak_mem_gb": 1.01
+  },
+  {
+    "label": "small",
+    "params_m": 26.49,
+    "batch_size": 16,
+    "block_size": 512,
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "attention": "flash",
+    "compiled": false,
+    "ms_per_iter": 276.91,
+    "tokens_per_s": 29583,
+    "mfu_pct": 15.56,
+    "peak_mem_gb": 3.84
+  }
+]

@@ -148,10 +148,48 @@ def test_build_prompt_includes_precedent_and_header(library):
         assert h.doc.text[:100] in prompt
 
 
+def test_prompt_matches_the_corpus_document_schema(library):
+    """The header must be complete, or the model writes its own Title line.
+
+    Regression test: an incomplete header let the fine-tuned model invent the
+    Session/Document lines and then re-declare the topic, so a request for one
+    subject came back as a resolution on another.
+    """
+    hits = BM25Index(library).search("climate resilience", k=2)
+    prompt = build_prompt("climate resilience", hits)
+
+    # precedent is presented as a preceding document, then the separator
+    sep = prompt.index("<|endoftext|>")
+    assert hits[0].doc.text[:60] in prompt[:sep]
+
+    header = prompt[sep:].splitlines()
+    fields = [ln.split(":")[0] for ln in header if ":" in ln]
+    assert fields == ["Session", "Document", "Title"], fields
+    assert "GENERAL ASSEMBLY" in header[:3]
+    # a blank line must separate the organ line from the first clause the model
+    # writes, otherwise it reads the document as still being in its header
+    assert prompt.endswith("The General Assembly,\n\n")
+
+
+def test_generate_can_suppress_tokens():
+    """Banning the separator stops the model closing a document immediately."""
+    import torch
+
+    from adhoc_gpt.config import GPTConfig
+    from adhoc_gpt.model import AdHocGPT
+
+    cfg = GPTConfig(vocab_size=20, block_size=16, n_layer=1, n_head=2, n_embd=32, dropout=0.0)
+    model = AdHocGPT(cfg).eval()
+    banned = [3, 7, 11]
+    out = model.generate(torch.zeros((2, 1), dtype=torch.long), 40, top_k=20,
+                         suppress_tokens=banned)
+    assert not set(out[:, 1:].flatten().tolist()) & set(banned)
+
+
 def test_build_prompt_trims_long_clauses(library):
     long_doc = Document("x", "Recalling " + "the situation " * 60)
     prompt = build_prompt("x", [Hit(long_doc, 1.0)], max_clause_chars=100)
-    clause_line = [ln for ln in prompt.splitlines() if ln.startswith("- ")][0]
+    clause_line = prompt.splitlines()[0]
     assert len(clause_line) < 130 and clause_line.endswith("...")
 
 

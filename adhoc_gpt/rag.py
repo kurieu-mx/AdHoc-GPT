@@ -193,6 +193,9 @@ def mmr(hits: Sequence[Hit], k: int = 4, lam: float = 0.7) -> list[Hit]:
 # --------------------------------------------------------------------------
 CLAUSE_SPLIT = re.compile(r"\n\s*\n")
 
+#: the document separator used by the corpus generator
+DOC_SEPARATOR = "<|endoftext|>"
+
 
 def clauses_from_corpus(
     text: str, max_docs: int | None = None, dedupe: bool = True
@@ -256,23 +259,43 @@ def build_prompt(
     hits: Sequence[Hit],
     organ: str = "The General Assembly",
     max_clause_chars: int = 220,
+    session: str = "eightieth",
+    document: str = "A/RES/80/DRAFT",
 ) -> str:
     """Format retrieved precedent + the drafting task into a model prompt.
 
-    The layout mirrors the corpus, so a model fine-tuned on the corpus sees a
-    familiar document header and continues it rather than describing it. Long
-    clauses are trimmed -- a small model's context is the scarce resource here.
+    The layout mirrors the corpus exactly: retrieved precedent is presented as a
+    preceding document, then the document separator the model was trained on,
+    then the header of the document it is being asked to write. Presenting the
+    precedent any other way puts the model out of distribution, and it responds
+    by emitting a separator instead of a draft.
+
+    Long clauses are trimmed -- a small model's context is the scarce resource.
     """
-    lines = [f"Title: Resolution on {task}", ""]
+    lines: list[str] = []
     if hits:
-        lines.append("Precedent clauses retrieved for reference:")
         for h in hits:
             text = h.doc.text
             if len(text) > max_clause_chars:
                 text = text[:max_clause_chars].rsplit(" ", 1)[0] + " ..."
-            lines.append(f"- {text}")
+            lines += [text, ""]
+        lines.append(DOC_SEPARATOR)
         lines.append("")
-    lines += [f"{organ},", ""]
+    # The header must carry every field the corpus places between the organ line
+    # and the first preambular clause. Omit one and the model fills it in itself,
+    # re-emitting a Title line with a topic of its own choosing. The trailing
+    # blank line matters too: without it the model reads the document as still
+    # being in its header.
+    lines += [
+        organ.upper().removeprefix("THE ").strip(),
+        f"Session: {session}    Agenda item 1",
+        f"Document: {document}",
+        f"Title: Resolution on {task}",
+        "",
+        f"{organ},",
+        "",
+        "",
+    ]
     return "\n".join(lines)
 
 

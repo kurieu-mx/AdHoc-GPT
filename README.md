@@ -14,7 +14,7 @@ The implementation deliberately avoids `torch.nn.MultiheadAttention`, `torch.nn.
 4. **Trained models with published curves.** A 7.5M-parameter model attains 1.4528 validation cross-entropy on character-level Shakespeare; an 8.1M-parameter model with a 2048-token BPE vocabulary attains 1.5990 on a TinyStories subset.
 5. **Domain specialization by fine-tuning.** A synthetic corpus of multilateral documents is generated from clause grammars, and a pretrained checkpoint is adapted to it under a shared vocabulary.
 6. **Retrieval-augmented generation implemented from scratch.** Okapi BM25, dense retrieval over the model's own token embeddings, reciprocal-rank fusion, maximal marginal relevance for redundancy reduction, and context-budgeted prompt assembly.
-7. **Reproducibility.** A single script reproduces every phase: `bash scripts/reproduce_all.sh`. The test suite contains 56 tests.
+7. **Reproducibility.** A single script reproduces every phase: `bash scripts/reproduce_all.sh`. The test suite contains 58 tests.
 
 ---
 
@@ -59,9 +59,25 @@ All results were produced by the code in this repository on a single RTX 4070 La
 |---|---|---|---|---|---|
 | Mini-AdHoc-LM (Phase 1) | 7.48M | tiny-Shakespeare, character vocabulary of 65 | 82M | 1.4528 | 28.9 min |
 | Mini-TinyStories (Phase 2) | 8.11M | TinyStories, 53.6M characters, BPE vocabulary of 2048 | 74M | 1.5990 | 23.9 min |
-| AdHoc-LM-Domain (Phase 3) | 8.11M | synthetic diplomatic corpus, fine-tuned from Phase 2 | — | *(in progress)* | — |
+| AdHoc-LM-Domain (Phase 3) | 8.11M | synthetic diplomatic corpus, fine-tuned from Phase 2 | 25M | 0.2892 | 8.8 min |
 
-Losses are cross-entropy per token and are not comparable across rows, since the tokenizers differ in how much information a single token carries. For reference, the character-level Shakespeare configuration of nanoGPT reports approximately 1.47 validation loss; the from-scratch implementation here reaches 1.4528 at 7.5M parameters.
+Losses are cross-entropy per token and are not comparable across rows, since the tokenizers differ in how much information a single token carries. For reference, the character-level Shakespeare configuration of nanoGPT reports approximately 1.47 validation loss; the from-scratch implementation here reaches 1.4528 at 7.5M parameters. The much lower Phase 3 loss reflects the predictability of a templated corpus rather than a stronger model: fine-tuning reduced validation loss from 8.94 to 1.31 within 100 iterations.
+
+![Validation loss across all three runs](runs/comparison.png)
+
+### Throughput
+
+Measured with `adhoc_gpt.bench` on the same GPU, with explicit CUDA synchronisation around the timed region.
+
+| Configuration | Parameters | ms/iteration | tokens/s | MFU | Peak memory |
+|---|---|---|---|---|---|
+| `mini`, fused attention, batch 48 | 7.48M | 173.7 | 70,746 | 10.3% | 2.53 GB |
+| `mini`, explicit attention, batch 48 | 7.48M | 243.6 | 50,436 | 7.3% | 3.37 GB |
+| `nano`, batch 16 | 1.07M | 10.0 | 203,965 | 4.2% | 0.18 GB |
+| `mini`, batch 16 | 8.11M | 53.9 | 75,992 | 11.9% | 1.01 GB |
+| `small`, batch 16 | 26.49M | 276.9 | 29,583 | 15.6% | 3.84 GB |
+
+The fused kernel is 1.40 times faster than the explicit implementation and uses 0.84 GB less memory, while producing numerically equivalent outputs (verified in the test suite). The `base` preset exceeds 8 GB at batch 16 and is reported as out of memory by the sweep rather than being silently skipped.
 
 ### Training curves
 
@@ -194,6 +210,34 @@ python -m adhoc_gpt.app serve --port 8000     # web interface, standard library 
 
 Retrieved clauses are formatted into a document header matching the corpus, so that the fine-tuned model continues the document rather than describing it. Generated output carries a disclaimer identifying it as synthetic.
 
+The prompt format is load-bearing, and getting it wrong is informative. Presenting precedent under a heading that does not occur in the corpus caused the model to emit a document separator immediately and write nothing; omitting the `Session` and `Document` fields caused it to supply those fields itself and then re-declare the topic, returning a resolution on an unrelated subject. The prompt therefore reproduces the corpus schema exactly, and generation suppresses the separator token. Both behaviours are covered by regression tests.
+
+Output of `python -m adhoc_gpt.app draft --topic "maritime security"`, abbreviated:
+
+```
+The General Assembly,
+
+Recalling the contribution of joint patrol arrangements to the protection of seafarers and
+their representatives,
+
+Mindful of the United Nations Convention on the Law of the Sea and the obligations arising
+therefrom,
+
+Noting that durable solutions to piracy in transit corridors require sustained international
+cooperation,
+
+1. Notes that capacity-building for prosecution and transfer agreements should be
+   demand-driven and sustained;
+
+2. Further decides to include in the provisional agenda of its seventy-sixth session an item
+   entitled "maritime security";
+
+4. Invites all States to strengthen joint patrol arrangements in accordance with regional
+   information-sharing arrangements;
+```
+
+The retrieved precedent is visible in the output: joint patrol arrangements and the Convention on the Law of the Sea both entered through retrieval. Clause repetition across operative paragraphs remains a limitation at this scale.
+
 ---
 
 ## Phase 5: visualization
@@ -214,7 +258,7 @@ python -m adhoc_gpt.plots --run runs/mini-adhoc-lm
 pytest
 ```
 
-The suite comprises 56 tests covering: parity of the layer normalization and GELU implementations with `torch.nn`; absence of information flow from future positions, established by gradient inspection; agreement between the explicit and fused attention paths; equivalence of cached and uncached forward passes; tokenizer round-trips including Unicode and special tokens; agreement of the incremental BPE trainer with a naive recount; the learning-rate schedule; next-token alignment of training batches; end-to-end training that must reduce the loss; fine-tuning from a checkpoint and rejection of vocabulary mismatch; type alignment of the clause grammars; BM25 ranking, filtering and redundancy reduction; the HTTP drafting interface; and every plotting routine.
+The suite comprises 58 tests covering: parity of the layer normalization and GELU implementations with `torch.nn`; absence of information flow from future positions, established by gradient inspection; agreement between the explicit and fused attention paths; equivalence of cached and uncached forward passes; tokenizer round-trips including Unicode and special tokens; agreement of the incremental BPE trainer with a naive recount; the learning-rate schedule; next-token alignment of training batches; end-to-end training that must reduce the loss; fine-tuning from a checkpoint and rejection of vocabulary mismatch; type alignment of the clause grammars; BM25 ranking, filtering and redundancy reduction; the HTTP drafting interface; and every plotting routine.
 
 If the shell defines a system `PYTHONPATH` (for example under ROS), invoke the suite as `env -u PYTHONPATH pytest`.
 
@@ -245,7 +289,7 @@ runs/               metrics, curves, samples (weights are not tracked)
 
 ## Status
 
-Phases 1, 2, 4 and 5 are complete. Phase 3 fine-tuning is running; its results and a generated draft will be added on completion. Subsequent work: non-synthetic domain corpora, instruction tuning, and longer context.
+All five phases are implemented, trained and documented. Known limitations: the domain corpus is synthetic, so the specialized model learns the form of multilateral drafting rather than its substance; operative paragraphs repeat within a draft; and the 256-token context restricts how much retrieved precedent can be supplied. Subsequent work: non-synthetic domain corpora, instruction tuning, longer context, and preference-based ranking of alternative drafts.
 
 ---
 

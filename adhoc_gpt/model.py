@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import inspect
 import math
+from typing import Sequence
 
 import torch
 import torch.nn as nn
@@ -280,13 +281,21 @@ class AdHocGPT(nn.Module):
         top_p: float | None = None,
         use_cache: bool = True,
         eos_token: int | None = None,
+        suppress_tokens: Sequence[int] | None = None,
     ) -> torch.Tensor:
         """Autoregressively sample ``max_new_tokens`` continuations of ``idx``.
 
         ``top_k`` keeps the k most likely tokens; ``top_p`` keeps the smallest
         set whose cumulative probability exceeds p (nucleus sampling). Both may
         be combined. A KV cache makes each step O(T) instead of O(T^2).
+
+        ``suppress_tokens`` bans token ids outright -- used to stop a model from
+        emitting a document separator before it has written anything.
         """
+        banned = (
+            torch.tensor(list(suppress_tokens), dtype=torch.long, device=idx.device)
+            if suppress_tokens else None
+        )
         was_training = self.training
         self.eval()
         past_kvs = None
@@ -308,6 +317,9 @@ class AdHocGPT(nn.Module):
                 logits, _ = self(cur[:, -self.config.block_size :])
 
             logits = logits[:, -1, :] / max(temperature, 1e-8)
+
+            if banned is not None:
+                logits.index_fill_(1, banned, float("-inf"))
 
             if top_k is not None:
                 k = min(top_k, logits.size(-1))

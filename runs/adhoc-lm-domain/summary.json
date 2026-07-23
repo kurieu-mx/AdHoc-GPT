@@ -1,0 +1,12 @@
+{
+  "params": 8114240,
+  "best_val_loss": 0.2891715466976166,
+  "final": {
+    "iter": 1999,
+    "train": 0.28055739402770996,
+    "val": 0.2892138659954071
+  },
+  "train_time_s": 530.6,
+  "tokens_seen": 24576000,
+  "out_dir": "runs/adhoc-lm-domain"
+}

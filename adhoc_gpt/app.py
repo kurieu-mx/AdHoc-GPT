@@ -78,8 +78,12 @@ class DraftingEngine:
         prompt, hits = fit_prompt(topic, hits, self.tokenizer, budget, organ=organ)
         ids = self.tokenizer.encode(prompt)[-self.model.config.block_size + 1 :]
         idx = torch.tensor(ids or [0], dtype=torch.long, device=self.device)[None, ...]
+        # the separator is part of the prompt; banning it stops the model from
+        # closing the document before it has written a single clause
+        eot = getattr(self.tokenizer, "special_tokens", {}).get("<|endoftext|>")
         out = self.model.generate(
-            idx, max_new_tokens=tokens, temperature=temperature, top_k=top_k, top_p=top_p
+            idx, max_new_tokens=tokens, temperature=temperature, top_k=top_k, top_p=top_p,
+            suppress_tokens=[eot] if eot is not None else None,
         )
         text = self.tokenizer.decode(out[0].tolist())
         continuation = text[len(prompt):] if text.startswith(prompt) else text

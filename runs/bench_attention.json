@@ -1,0 +1,30 @@
+[
+  {
+    "label": "mini (flash)",
+    "params_m": 7.48,
+    "batch_size": 48,
+    "block_size": 256,
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "attention": "flash",
+    "compiled": false,
+    "ms_per_iter": 173.69,
+    "tokens_per_s": 70746,
+    "mfu_pct": 10.26,
+    "peak_mem_gb": 2.53
+  },
+  {
+    "label": "mini (manual)",
+    "params_m": 7.48,
+    "batch_size": 48,
+    "block_size": 256,
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "attention": "manual",
+    "compiled": false,
+    "ms_per_iter": 243.64,
+    "tokens_per_s": 50436,
+    "mfu_pct": 7.32,
+    "peak_mem_gb": 3.37
+  }
+]
